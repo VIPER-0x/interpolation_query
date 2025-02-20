@@ -1,0 +1,93 @@
+using System;  
+using System.Diagnostics;  
+using System.Threading;  
+using System.Threading.Tasks;  
+
+class ParallelSearch  
+{  
+    // تابع جستجو از start به middle  
+    static int SearchForward(int[] arr, int start, int middle, int x, CancellationToken token)  
+    {  
+        for (int i = start; i <= middle && !token.IsCancellationRequested; i++)  
+        {  
+            if (arr[i] == x)  
+                return i;  
+        }  
+        return -1;  
+    }  
+
+    // تابع جستجو از end به middle  
+    static int SearchBackward(int[] arr, int end, int middle, int x, CancellationToken token)  
+    {  
+        for (int i = end; i > middle && !token.IsCancellationRequested; i--)  
+        {  
+            if (arr[i] == x)  
+                return i;  
+        }  
+        return -1;  
+    }  
+
+    // تابع اصلی  
+    static void Main(string[] args)  
+    {  
+        // آرایه‌ای از اعداد مرتب شده  
+        int[] arr = { 10, 12, 13, 16, 18, 19, 20, 21, 22, 23, 24, 33, 35, 42, 47 };  
+        int n = arr.Length;  
+
+        // عنصری که باید جستجو شود  
+        int x = 19;  
+
+        // ایجاد یک CancellationTokenSource برای مدیریت لغو عملیات  
+        CancellationTokenSource cts = new CancellationTokenSource();  
+
+        // ایجاد Stopwatch برای اندازه‌گیری زمان هر جستجو  
+        Stopwatch forwardStopwatch = new Stopwatch();  
+        Stopwatch backwardStopwatch = new Stopwatch();  
+
+        // محاسبه middle index  
+        int middle = n / 2;  
+
+        // اجرای موازی جستجو از دو جهت  
+        Task<int> forwardTask = Task.Run(() =>  
+        {  
+            forwardStopwatch.Start();  
+            int result = SearchForward(arr, 0, middle, x, cts.Token);  
+            forwardStopwatch.Stop();  
+            return result;  
+        });  
+
+        Task<int> backwardTask = Task.Run(() =>  
+        {  
+            backwardStopwatch.Start();  
+            int result = SearchBackward(arr, n - 1, middle, x, cts.Token);  
+            backwardStopwatch.Stop();  
+            return result;  
+        });  
+
+        // انتظار برای اولین نتیجه موفق  
+        int index = -1;  
+        Task.WhenAny(forwardTask, backwardTask).ContinueWith(t =>  
+        {  
+            if (t.Result == forwardTask && forwardTask.Result != -1)  
+            {  
+                index = forwardTask.Result;  
+                cts.Cancel(); // لغو جستجوی دیگر  
+            }  
+            else if (t.Result == backwardTask && backwardTask.Result != -1)  
+            {  
+                index = backwardTask.Result;  
+                cts.Cancel(); // لغو جستجوی دیگر  
+            }  
+        }).Wait(); // انتظار برای تکمیل ContinueWith  
+
+        // چاپ نتیجه جستجو  
+        if (index != -1)  
+            Console.WriteLine("Element found at index " + index);  
+        else  
+            Console.WriteLine("Element not found");  
+
+        // چاپ زمان اجرا برای هر جستجو  
+        Console.WriteLine("Forward search time: " + forwardStopwatch.Elapsed.TotalMilliseconds + " milliseconds");  
+        Console.WriteLine("Backward search time: " + backwardStopwatch.Elapsed.TotalMilliseconds + " milliseconds");  
+    }  
+}
